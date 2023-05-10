@@ -1,4 +1,3 @@
-#define __AVX__ 1
 
 #include "absl/strings/charconv.h"
 #include "absl/strings/numbers.h"

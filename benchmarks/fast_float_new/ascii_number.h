@@ -25,15 +25,6 @@ fastfloat_really_inline constexpr bool has_simd_opts() {
 #endif
 }
 
-template <typename UC>
-fastfloat_really_inline constexpr int min_unroll_len()
-{
-  if (std::is_same<UC, char16_t>::value)
-    return 16;
-  else
-    return 8;
-}
-
 // Next function can be micro-optimized, but compilers are entirely
 // able to optimize it well.
 template <typename UC>
@@ -85,7 +76,9 @@ FASTFLOAT_SIMD_DISABLE_WARNINGS
   __m128i masked = _mm_and_si128(data, masks);
   __m128i packed = _mm_packus_epi16(masked, masked);
 
-  return (uint64_t)_mm_cvtsd_f64(_mm_castsi128_pd(packed));
+  uint64_t val;
+  _mm_storeu_si64(&val, packed);
+  return val;
 FASTFLOAT_SIMD_RESTORE_WARNINGS
 }
 
@@ -139,7 +132,7 @@ uint32_t parse_eight_digits_unrolled(uint64_t val) {
 template <typename UC>
 fastfloat_really_inline FASTFLOAT_CONSTEXPR20
 uint32_t parse_eight_digits_unrolled(UC const * chars)  noexcept {
-  if constexpr (cpp20_and_in_constexpr() || !has_simd_opts<UC>()) {
+  if (cpp20_and_in_constexpr() || !has_simd_opts<UC>()) {
     return parse_eight_digits_unrolled(read8_to_u64(chars)); // truncation okay
   }
   return parse_eight_digits_unrolled(simd_read8_to_u64(chars));
@@ -152,25 +145,9 @@ fastfloat_really_inline constexpr bool is_made_of_eight_digits_fast(uint64_t val
      0x8080808080808080));
 }
 
-// credit @aqrit
-fastfloat_really_inline FASTFLOAT_CONSTEXPR20
-bool is_made_of_eight_digits_fast(const char* chars)  noexcept {
-  return is_made_of_eight_digits_fast(read8_to_u64(chars));
-}
-
-fastfloat_really_inline bool is_made_of_eight_digits_fast(const char16_t* chars)  noexcept {
-  const __m128i data = _mm_loadu_si128(reinterpret_cast<const __m128i*>(chars));
-  // (x - '0') <= 9
-  // http://0x80.pl/articles/simd-parsing-int-sequences.html
-  const __m128i t0 = _mm_sub_epi16(data, _mm_set1_epi16(80));
-  const __m128i t1 = _mm_cmpgt_epi16(t0, _mm_set1_epi16(-119));
-  return _mm_movemask_epi8(t1) == 0;
-}
-
-
 fastfloat_really_inline FASTFLOAT_CONSTEXPR20
 bool parse_if_eight_digits_unrolled(const char* chars, uint64_t& i) noexcept {
-  if (is_made_of_eight_digits_fast(read8_to_u64(chars))) [[likely]] {
+  if (is_made_of_eight_digits_fast(read8_to_u64(chars))) {
     i = i * 100000000 + parse_eight_digits_unrolled(read8_to_u64(chars));
     return true;
   }
@@ -187,7 +164,7 @@ bool parse_if_eight_digits_unrolled(const char* chars, uint64_t& i) noexcept {
 fastfloat_really_inline FASTFLOAT_CONSTEXPR20
 bool parse_if_eight_digits_unrolled(const char16_t* chars, uint64_t& i) noexcept {
 #ifdef FASTFLOAT_SSE2
-  if constexpr (cpp20_and_in_constexpr()) {
+  if (cpp20_and_in_constexpr()) {
     return false;
   }    
 FASTFLOAT_SIMD_DISABLE_WARNINGS
@@ -241,7 +218,6 @@ fastfloat_really_inline FASTFLOAT_CONSTEXPR20
 parsed_number_string_t<UC> parse_number_string(UC const *p, UC const * pend, parse_options_t<UC> options) noexcept {
   chars_format const fmt = options.format;
   UC const decimal_point = options.decimal_point;
-  //static constexpr int min_unroll_len = min_unroll_len<UC>();
 
   parsed_number_string_t<UC> answer;
   answer.valid = false;
@@ -281,7 +257,6 @@ parsed_number_string_t<UC> parse_number_string(UC const *p, UC const * pend, par
     // can occur at most twice without overflowing, but let it occur more, since
     // for integers with many digits, digit parsing is the primary bottleneck.
     while ((std::distance(p, pend) >= 8) && parse_if_eight_digits_unrolled(p, i)) {  // in rare cases, this will overflow, but that's ok
-      //i = i * 100000000 + parse_eight_digits_unrolled(p);
       p += 8;
     }
     while ((p != pend) && is_integer(*p)) {
@@ -381,40 +356,6 @@ parsed_number_string_t<UC> parse_number_string(UC const *p, UC const * pend, par
   answer.mantissa = i;
   return answer;
 }
-
-//template <typename UC>
-//fastfloat_really_inline FASTFLOAT_CONSTEXPR20
-//void parse_truncated_number_string(parsed_number_string_t<UC>& ps)
-//{
-//  // Let us start again, this time, avoiding overflows.
-//  // We don't need to check if is_integer, since we use the
-//  // pre-tokenized spans.
-//  uint64_t i = 0;
-//  int64_t exponent = 0;
-//  const UC* p = ps.integer.ptr;
-//  const UC* const int_end = p + ps.integer.len();
-//  const uint64_t minimal_nineteen_digit_integer{1000000000000000000};
-//  while ((i < minimal_nineteen_digit_integer) && (p != int_end)) {
-//    i = i * 10 + uint64_t(*p - UC('0'));
-//    ++p;
-//  }
-//  if (i >= minimal_nineteen_digit_integer) { // We have a big integers
-//    exponent = int_end - p + ps.exp_number;
-//  }
-//  else { // We have a value with a fractional component.
-//    p = ps.fraction.ptr;
-//    const UC* const frac_end = p + ps.fraction.len();
-//    while ((i < minimal_nineteen_digit_integer) && (p != frac_end)) {
-//      i = i * 10 + uint64_t(*p - UC('0'));
-//      ++p;
-//    }
-//    exponent = ps.fraction.ptr - p + ps.exp_number;
-//  }
-//  // We have now corrected both exponent and i, to a truncated value
-//
-//  ps.exponent = exponent;
-//  ps.mantissa = i;
-//}
 
 } // namespace fast_float
 
