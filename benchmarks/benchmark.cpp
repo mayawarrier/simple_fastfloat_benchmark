@@ -240,7 +240,7 @@ double findmax_absl_from_chars(std::vector<std::string> &s) {
 
 #ifdef USING_COUNTERS
 template <class T, typename CharT>
-std::vector<event_count> time_it_ns(std::vector<std::basic_string<CharT>> &lines,
+__attribute__((noinline)) std::vector<event_count> time_it_ns(std::vector<std::basic_string<CharT>> &lines,
                                      T const &function, size_t repeat) {
   std::vector<event_count> aggregate;
   event_collector collector;
@@ -381,9 +381,9 @@ void process16(std::vector<std::u16string>& lines, size_t volume) {
   pretty_print(volume, lines.size(), "ryu_parse", time_it_ns(lines, findmax_ryus2d, repeat));
 #endif
   //pretty_print(volume, lines.size(), "abseil", time_it_ns(lines, findmax_absl_from_chars, repeat)); 
-    
+  
   pretty_print(volume, lines.size(), "fastfloat", time_it_ns(lines, findmax_fastfloat<char16_t>, repeat));  
-  pretty_print(volume, lines.size(), "fastfloat_simd", time_it_ns(lines, findmax_fastfloat_new<char16_t>, repeat));  
+  pretty_print(volume, lines.size(), "fastfloat_simd", time_it_ns(lines, findmax_fastfloat_new<char16_t>, repeat));
   pretty_print(volume, lines.size(), "fastfloat_simd2", time_it_ns(lines, findmax_fastfloat_new2<char16_t>, repeat));
 #ifdef FROM_CHARS_AVAILABLE_MAYBE
   //pretty_print(volume, lines.size(), "from_chars", time_it_ns(lines, findmax_from_chars, repeat));
