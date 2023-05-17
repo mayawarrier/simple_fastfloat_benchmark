@@ -1,5 +1,5 @@
-#ifndef FASTFLOAT_NEW_ASCII_NUMBER_H
-#define FASTFLOAT_NEW_ASCII_NUMBER_H
+#ifndef FASTFLOAT_NEW2_ASCII_NUMBER_H
+#define FASTFLOAT_NEW2_ASCII_NUMBER_H
 
 #include <cctype>
 #include <cstdint>
@@ -13,8 +13,11 @@
 #include <emmintrin.h>
 #endif
 
+#if defined(__SSE4_1__) || defined(__AVX__) // Visual studio doesn't define a SSE4.1 macro 
+#include <smmintrin.h>
+#endif
 
-namespace fast_float_new {
+namespace fast_float_new2 {
 
 template <typename UC>
 fastfloat_really_inline constexpr bool has_simd_opts() {
@@ -79,6 +82,22 @@ FASTFLOAT_SIMD_RESTORE_WARNINGS
 }
 
 #endif
+
+fastfloat_really_inline
+uint32_t parse_eight_digits_unrolled_alt(const __m128i data) {
+  const __m128i ascii0 = _mm_set1_epi8('0');
+  const __m128i mul_1_10 =
+    _mm_setr_epi8(10, 1, 10, 1, 10, 1, 10, 1, 10, 1, 10, 1, 10, 1, 10, 1);
+  const __m128i mul_1_100 = _mm_setr_epi16(100, 1, 100, 1, 100, 1, 100, 1);
+  const __m128i mul_1_10000 =
+    _mm_setr_epi16(10000, 1, 10000, 1, 10000, 1, 10000, 1);
+  const __m128i input = _mm_sub_epi8(data, ascii0);
+  const __m128i t1 = _mm_maddubs_epi16(input, mul_1_10);
+  const __m128i t2 = _mm_madd_epi16(t1, mul_1_100);
+  const __m128i t3 = _mm_packus_epi32(t2, t2);
+  const __m128i t4 = _mm_madd_epi16(t3, mul_1_10000);
+  return _mm_cvtsi128_si32(t4);
+}
 
 // dummy for compile
 template <typename UC, FASTFLOAT_ENABLE_IF(!has_simd_opts<UC>())>
@@ -165,7 +184,7 @@ FASTFLOAT_SIMD_DISABLE_WARNINGS
   const __m128i t1 = _mm_cmpgt_epi16(t0, _mm_set1_epi16(-119));
 
   if (_mm_movemask_epi8(t1) == 0) {
-    i = i * 100000000 + parse_eight_digits_unrolled(simd_read8_to_u64(data));
+    i = i * 100000000 + parse_eight_digits_unrolled_alt(data);
     return true;
   }
   else return false;

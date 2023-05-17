@@ -8,6 +8,7 @@
 #endif
 #include "fast_float/fast_float.h"
 #include "./fast_float_new/fast_float.h"
+#include "./fast_float_new2/fast_float.h"
 
 #ifdef ENABLE_RYU
 #include "ryu_parse.h"
@@ -208,6 +209,20 @@ double findmax_fastfloat_new(std::vector<std::basic_string<CharT>>& s) {
   return answer;
 }
 
+template <typename CharT>
+double findmax_fastfloat_new2(std::vector<std::basic_string<CharT>>& s) {
+  double answer = 0;
+  double x = 0;
+  for (auto& st : s) {
+    auto [p, ec] = fast_float_new2::from_chars(st.data(), st.data() + st.size(), x);
+    if (p == st.data()) {
+      throw std::runtime_error("bug in findmax_fastfloat_new2");
+    }
+    answer = answer > x ? answer : x;
+  }
+  return answer;
+}
+
 #ifndef __CYGWIN__
 double findmax_absl_from_chars(std::vector<std::string> &s) {
   double answer = 0;
@@ -345,8 +360,7 @@ void process(std::vector<std::string> &lines, size_t volume) {
   
   pretty_print(volume, lines.size(), "fastfloat", time_it_ns(lines, findmax_fastfloat<char>, repeat));
   pretty_print(volume, lines.size(), "fastfloat_simd", time_it_ns(lines, findmax_fastfloat_new<char>, repeat));
-  
-  //pretty_print(volume, lines.size(), "fastfloat_new2", time_it_ns(lines, findmax_fastfloat_new2<char>, repeat));
+  pretty_print(volume, lines.size(), "fastfloat_simd2", time_it_ns(lines, findmax_fastfloat_new2<char>, repeat));
   
 #ifdef FROM_CHARS_AVAILABLE_MAYBE
   pretty_print(volume, lines.size(), "from_chars", time_it_ns(lines, findmax_from_chars, repeat));
@@ -369,9 +383,8 @@ void process16(std::vector<std::u16string>& lines, size_t volume) {
   //pretty_print(volume, lines.size(), "abseil", time_it_ns(lines, findmax_absl_from_chars, repeat)); 
     
   pretty_print(volume, lines.size(), "fastfloat", time_it_ns(lines, findmax_fastfloat<char16_t>, repeat));  
-  pretty_print(volume, lines.size(), "fastfloat_simd", time_it_ns(lines, findmax_fastfloat_new<char16_t>, repeat));
-  
-  //pretty_print(volumeMB, lines.size(), "fastfloat_new2", time_it_ns(lines, findmax_fastfloat_new2<char16_t>, repeat));
+  pretty_print(volume, lines.size(), "fastfloat_simd", time_it_ns(lines, findmax_fastfloat_new<char16_t>, repeat));  
+  pretty_print(volume, lines.size(), "fastfloat_simd2", time_it_ns(lines, findmax_fastfloat_new2<char16_t>, repeat));
 #ifdef FROM_CHARS_AVAILABLE_MAYBE
   //pretty_print(volume, lines.size(), "from_chars", time_it_ns(lines, findmax_from_chars, repeat));
 #endif
